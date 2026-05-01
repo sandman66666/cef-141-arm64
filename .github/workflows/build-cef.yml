@@ -1,9 +1,70 @@
-  name: Build CEF                                    
+name: Build CEF 141 with proprietary codecs                                                                                                
                                                                                                                                              
-  on: workflow_dispatch                              
+  on: workflow_dispatch                                                                                                                    
                                                                                                                                              
-  jobs:                                              
+  jobs:                                                                                                                                      
     build:                                                                                                                                   
-      runs-on: macos-14                           
-      steps:                                                                                                                                 
-        - run: echo "hello from $(uname -m) $(sw_vers -productVersion)"
+      runs-on: macos-14                                                                                                                      
+      timeout-minutes: 350                                                                                                                   
+                                                  
+      steps:                             
+        - name: Free disk space            
+          run: |                                     
+            echo "=== Disk before cleanup ===" && df -h /
+            sudo rm -rf /Applications/Xcode_14* /Applications/Xcode_15.0* /Applications/Xcode_15.1* /Applications/Xcode_15.2* 
+  /Applications/Xcode_15.3* 2>/dev/null || true                                                                                              
+            sudo rm -rf ~/Library/Developer/CoreSimulator 2>/dev/null || true
+            sudo rm -rf ${ANDROID_HOME:-/Users/runner/Library/Android} 2>/dev/null || true                                                   
+            sudo rm -rf /usr/local/share/dotnet 2>/dev/null || true
+            echo "=== Disk after cleanup ===" && df -h /
+                                           
+        - name: Verify environment                                                                                                           
+          run: |                           
+            sw_vers                                                                                                                          
+            uname -m                                                                                                                         
+            xcode-select -p              
+            xcodebuild -version                                                                                                              
+            python3 --version                     
+            python3 -c 'import plistlib; print("plistlib OK")'                                                                               
+                                                  
+        - name: Set up depot_tools and automate-git.py
+          run: |                   
+            mkdir -p ~/cef-build
+            cd ~/cef-build                                                                                                                   
+            git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+            curl -fsSL https://bitbucket.org/chromiumembedded/cef/raw/master/tools/automate/automate-git.py -o automate-git.py               
+                                                     
+        - name: Build CEF with proprietary codecs
+          run: |                           
+            export PATH="$HOME/cef-build/depot_tools:$PATH"                                                                                  
+            export GN_DEFINES="is_official_build=true proprietary_codecs=true ffmpeg_branding=Chrome"
+            export GYP_DEFINES="$GN_DEFINES"                                                                                                 
+            python3 ~/cef-build/automate-git.py \                                                                                            
+              --download-dir=$HOME/cef-build/chromium_git \
+              --depot-tools-dir=$HOME/cef-build/depot_tools \                                                                                
+              --branch=7390 \                     
+              --arm64-build \                                                                                                                
+              --no-debug-build \                                                                                                             
+              --no-chromium-history \    
+              --no-release-tests \                                                                                                           
+              --with-pgo-profiles                                                                                                            
+                                         
+        - name: Locate artifact                                                                                                              
+          id: locate                                                                                                                         
+          run: |                         
+            shopt -s nullglob                                                                                                                
+            ARTIFACTS=("$HOME/cef-build/chromium_git/chromium/src/cef/binary_distrib/cef_binary_141.0.11+"*"macosarm64.tar.bz2")
+            if [ ${#ARTIFACTS[@]} -eq 0 ]; then
+              echo "No artifact found"; exit 1       
+            fi                             
+            echo "artifact_path=${ARTIFACTS[0]}" >> "$GITHUB_OUTPUT"
+            echo "artifact_name=$(basename ${ARTIFACTS[0]} .tar.bz2)" >> "$GITHUB_OUTPUT"                                                    
+            ls -lh "${ARTIFACTS[0]}"                 
+                                                                                                                                             
+        - name: Upload CEF tarball                
+          uses: actions/upload-artifact@v4                                                                                                   
+          with:                                   
+            name: ${{ steps.locate.outputs.artifact_name }}                                                                                  
+            path: ${{ steps.locate.outputs.artifact_path }}                                                                                  
+            retention-days: 14           
+            compression-level: 0     
