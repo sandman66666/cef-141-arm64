@@ -1,0 +1,9 @@
+  name: Build CEF                                    
+                                                                                                                                             
+  on: workflow_dispatch                              
+                                                                                                                                             
+  jobs:                                              
+    build:                                                                                                                                   
+      runs-on: macos-14                           
+      steps:                                                                                                                                 
+        - run: echo "hello from $(uname -m) $(sw_vers -productVersion)"
