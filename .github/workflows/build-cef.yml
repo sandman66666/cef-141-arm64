@@ -1,7 +1,6 @@
 name: Build CEF 141 with proprietary codecs                                                                                           
                                                   
-  on:                                                                                                                                        
-    workflow_dispatch: {}                           
+on: [workflow_dispatch]                       
                                                                                                                                              
   jobs:                                                                                                                                      
     build:                               
